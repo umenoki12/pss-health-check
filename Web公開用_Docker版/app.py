@@ -9,9 +9,18 @@ if getattr(sys, 'frozen', False):
     base_dir = os.path.dirname(sys.executable)
     dist_folder = os.path.join(base_dir, 'dist')
 else:
-    # 開発中の場合: 親フォルダの frontend/dist を探す
+    # スクリプト実行の場合
     base_dir = os.path.dirname(os.path.abspath(__file__))
-    dist_folder = os.path.abspath(os.path.join(base_dir, '..', 'frontend', 'dist'))
+    
+    # 1. まず同じフォルダにある dist を探す (Dockerや配布パッケージ用)
+    local_dist = os.path.join(base_dir, 'dist')
+    # 2. なければ開発時の構造 (../frontend/dist) を探す
+    dev_dist = os.path.abspath(os.path.join(base_dir, '..', 'frontend', 'dist'))
+    
+    if os.path.exists(local_dist):
+        dist_folder = local_dist
+    else:
+        dist_folder = dev_dist
 
 key_path = os.path.join(base_dir, 'agent-key.json')
 
@@ -69,4 +78,4 @@ def catch_all(path):
 
 if __name__ == '__main__':
     print(f"Frontend folder: {dist_folder}")
-    app.run(debug=True, port=5000)
+    app.run(debug=True, host='0.0.0.0',port=5000)
