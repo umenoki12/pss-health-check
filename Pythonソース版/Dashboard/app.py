@@ -1,22 +1,35 @@
 import os
 import sys
-from flask import Flask, jsonify, send_from_directory
+from flask import Flask, jsonify, send_from_directory, request
 from flask_cors import CORS
 from google.cloud import firestore
 
+# --- 1. distフォルダの場所を賢く探す設定 ---
 if getattr(sys, 'frozen', False):
-    # .exeの場合: 同じフォルダにある 'dist' フォルダを探す
+    # .exeの場合
     base_dir = os.path.dirname(sys.executable)
     dist_folder = os.path.join(base_dir, 'dist')
 else:
-    # 開発中の場合: 親フォルダの frontend/dist を探す
+    # Pythonスクリプトとして実行する場合
     base_dir = os.path.dirname(os.path.abspath(__file__))
-    dist_folder = os.path.abspath(os.path.join(base_dir, '..', 'frontend', 'dist'))
+    
+    # まず、同じフォルダに 'dist' があるか確認 (配布用パッケージ/Docker用)
+    local_dist = os.path.join(base_dir, 'dist')
+    # なければ、開発環境用のパス (../frontend/dist) を確認
+    dev_dist = os.path.abspath(os.path.join(base_dir, '..', 'frontend', 'dist'))
+    
+    if os.path.exists(local_dist):
+        dist_folder = local_dist
+    else:
+        dist_folder = dev_dist
 
+# キーファイルのパス設定
 key_path = os.path.join(base_dir, 'agent-key.json')
 
 if not os.path.exists(key_path):
     print(f"エラー: {key_path} が見つかりません。")
+    # Dockerなどでログが見えるように強制終了せず進める場合もありますが、
+    # DBがないと動かないのでexitします
     sys.exit(1)
 
 try:
@@ -38,6 +51,7 @@ def get_computers():
             data = doc.to_dict()
             data['id'] = doc.id
             if 'last_seen' in data:
+                # datetime型を文字列に変換
                 data['last_seen'] = data['last_seen'].isoformat()
             results.append(data)
         return jsonify(results)
@@ -59,7 +73,7 @@ def serve():
     if os.path.exists(os.path.join(app.static_folder, 'index.html')):
         return send_from_directory(app.static_folder, 'index.html')
     else:
-        return "エラー: dist/index.html が見つかりません。", 404
+        return f"エラー: {dist_folder} に index.html が見つかりません。<br>現在の参照パス: {dist_folder}", 404
 
 @app.route('/<path:path>')
 def catch_all(path):
@@ -69,4 +83,5 @@ def catch_all(path):
 
 if __name__ == '__main__':
     print(f"Frontend folder: {dist_folder}")
-    app.run(debug=True, port=5000)
+    # --- 2. サーバー公開用に host='0.0.0.0' を追加 ---
+    app.run(debug=True, host='0.0.0.0', port=5000)
