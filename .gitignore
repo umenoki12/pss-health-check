@@ -1,0 +1,17 @@
+# --- 【最重要】セキュリティ設定 ---
+# どのフォルダにある agent-key.json もすべて無視する
+agent-key.json
+**/agent-key.json
+
+# --- 容量・不要ファイル対策 ---
+# Windows用のexeファイルはGitに上げない（重いため）
+*.exe
+*.dll
+
+# --- Pythonの一時ファイル ---
+__pycache__/
+*.pyc
+
+# --- OSの不要ファイル ---
+.DS_Store
+Thumbs.db

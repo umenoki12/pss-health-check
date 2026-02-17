@@ -1,0 +1,3 @@
+psutil
+google-cloud-firestore
+docker
