@@ -1,8 +1,33 @@
 import os
 import sys
-from flask import Flask, jsonify, send_from_directory
+from datetime import datetime, timezone  # ✨新規追加: サーバー側で正確な時間を記録するため
+from flask import Flask, jsonify, send_from_directory, request, abort 
 from flask_cors import CORS
 from google.cloud import firestore
+
+# --- 🔒 1. 各種トークンの設定（セキュア版） ---
+# 管理者用（削除用）の合言葉
+ADMIN_TOKEN = os.environ.get('PSS_ADMIN_TOKEN')
+# ✨新規追加: エージェント（PC）からの送信用の合言葉
+AGENT_TOKEN = os.environ.get('PSS_AGENT_TOKEN')
+
+def check_admin_auth():
+    """管理者の合言葉をチェックする関数"""
+    token = request.headers.get('X-Admin-Token')
+    if not ADMIN_TOKEN:
+        abort(500, description="サーバー設定エラー: 管理者トークンが設定されていません。")
+    if not token or token != ADMIN_TOKEN:
+        abort(401, description="Unauthorized: 管理者認証が必要です。")
+
+# ✨新規追加: エージェント用の合言葉をチェックする関数
+def check_agent_auth():
+    """エージェントからのデータ送信権限をチェックする関数"""
+    token = request.headers.get('X-Agent-Token')
+    if not AGENT_TOKEN:
+        abort(500, description="サーバー設定エラー: エージェントトークンが設定されていません。")
+    if not token or token != AGENT_TOKEN:
+        abort(401, description="Unauthorized: エージェント認証が必要です。")
+# ---------------------------------------------
 
 if getattr(sys, 'frozen', False):
     # .exeの場合: 同じフォルダにある 'dist' フォルダを探す
@@ -53,13 +78,37 @@ def get_computers():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# --- 削除用API
+# --- 🔒 2. 削除用APIを保護する ---
 @app.route('/api/computers/<pc_id>', methods=['DELETE'])
 def delete_computer(pc_id):
+    check_admin_auth()
     try:
-        # 指定されたIDのドキュメントをFirestoreから削除
         db.collection('computers').document(pc_id).delete()
         return jsonify({"message": f"{pc_id} deleted successfully"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# --- 🔒 3. データ受信用API（✨新規追加: エージェントからの通信受け口） ---
+
+@app.route('/api/computers/<pc_id>', methods=['POST'])
+def update_computer(pc_id):
+    # 1. まずエージェントの合言葉をチェック（偽造データの送信を防ぐ）
+    check_agent_auth()
+    
+    try:
+        # 2. エージェントから送られてきた状態データ(JSON)を受け取る
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "データが空です"}), 400
+            
+        # 3. ★ハッカー対策: 時間の偽装を防ぐため、受信した「サーバー側の現在時刻」を強制的に記録する
+        data['last_seen'] = datetime.now(timezone.utc)
+            
+        # 4. サーバー側が責任を持ってFirestoreに書き込む
+        db.collection('computers').document(pc_id).set(data, merge=True)
+        
+        return jsonify({"message": f"{pc_id} updated successfully"}), 200
+        
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
