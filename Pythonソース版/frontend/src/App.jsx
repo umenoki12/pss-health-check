@@ -45,42 +45,34 @@ function App() {
     })
   }
 
-  // ★追加: 削除機能
-// ★追加・修正: 削除機能（パスワード認証付き）
+  // 削除機能（パスワード認証付き）
   const handleDelete = async (id) => {
-    // 1. まず本当に削除するか確認
     if (!window.confirm(`本当にPC「${id}」を削除してもよろしいですか？\n(データは完全に消えます)`)) {
       return;
     }
 
-    // 2. ★追加: 管理者パスワードを入力させるポップアップを出す
     const token = prompt("管理者のパスワードを入力してください:");
     
-    // キャンセルされたり、空欄だった場合はここで処理を止める
     if (!token) {
       alert("パスワードが入力されなかったため、削除をキャンセルしました。");
       return;
     }
 
     try {
-      // 3. ★修正: fetchの際に、入力されたパスワードをヘッダーに乗せて送る
-      const response = await fetch(`http://127.0.0.1:5000/api/computers/${id}`, {
+      // ★修正箇所1: 127.0.0.1 を相対パスに変更！
+      const response = await fetch(`/pss-dashboard/api/computers/${id}`, {
         method: 'DELETE',
         headers: {
           'X-Admin-Token': token  // これがバックエンドの check_admin_auth() に届きます！
         }
       });
 
-      // 4. ★修正: バックエンドからの返事（ステータスコード）によって処理を分ける
       if (response.ok) {
-        // 成功 (200 OK)
         setComputers(prev => prev.filter(pc => pc.id !== id));
         alert(`PC「${id}」を正常に削除しました。`);
       } else if (response.status === 401) {
-        // パスワード間違い (401 Unauthorized)
         alert("❌ パスワードが間違っています。削除できません。");
       } else {
-        // その他のエラー
         alert("削除に失敗しました。サーバーエラーです。");
       }
     } catch (err) {
@@ -91,7 +83,8 @@ function App() {
 
   const fetchComputers = async () => {
     try {
-      const response = await fetch('http://127.0.0.1:5000/api/computers')
+      // ★修正箇所2: 127.0.0.1 を相対パスに変更！
+      const response = await fetch('/pss-dashboard/api/computers')
       if (!response.ok) throw new Error(response.statusText)
       let data = await response.json()
       data = sortComputers(data)
@@ -119,7 +112,7 @@ function App() {
             key={pc.id} 
             pc={pc} 
             status={getPCStatus(pc)} 
-            onDelete={handleDelete} // ★削除関数を渡す
+            onDelete={handleDelete}
           />
         ))}
       </div>
@@ -154,9 +147,8 @@ function PC_Card({ pc, status, onDelete }) {
       backgroundColor: bgColor,
       boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
       color: '#333',
-      position: 'relative' // 削除ボタンの配置用
+      position: 'relative'
     }}>
-      {/* ★追加: 削除ボタン (右上に配置) */}
       <button 
         onClick={() => onDelete(pc.id)}
         style={{
